@@ -109,19 +109,19 @@ fn setup_monitoring(ip: &str) -> Result<()> {
         return Ok(());
     }
 
-    // Enable packet filtering
-    run_sudo_command("pfctl", &["-e"])?;
-
     // Create PF rules for monitoring
     let rules = format!(
-        "table <monitored> {{ {} }}\n\
-         block drop from <monitored> to any\n\
-         block drop from any to <monitored>",
-        ip
+        "# Monitoring rules\n\
+         block drop in proto {{tcp udp icmp}} from {} to any\n\
+         block drop out proto {{tcp udp icmp}} from any to {}\n",
+        ip, ip
     );
     std::fs::write("/tmp/pf.rules", &rules)?;
 
-    // Load the rules
+    // Enable PF if not already enabled (ignore if already enabled)
+    let _ = run_sudo_command("pfctl", &["-e"]);
+
+    // Load the rules with force flag
     run_sudo_command("pfctl", &["-f", "/tmp/pf.rules"])?;
 
     info!("Started monitoring {}", ip);
@@ -141,37 +141,30 @@ fn setup_bandwidth_limit(ip: &str, upload: Option<u32>, download: Option<u32>) -
     }
 
     let mut rules = String::new();
-    rules.push_str("table <limited> { ");
-    rules.push_str(ip);
-    rules.push_str(" }\n");
+    rules.push_str("# Bandwidth limiting rules\n");
 
+    // Simple rate limiting using state tracking
     if let Some(up) = upload {
-        rules.push_str(&format!("queue upload bandwidth {}K max {}K\n", up, up * 2));
+        rules.push_str(&format!(
+            "pass out proto tcp from {} to any flags S/SA keep state \
+            (max-src-states {}, max-src-conn-rate {}/5)\n",
+            ip, up, up
+        ));
     }
 
     if let Some(down) = download {
         rules.push_str(&format!(
-            "queue download bandwidth {}K max {}K\n",
-            down,
-            down * 2
+            "pass in proto tcp from any to {} flags S/SA keep state \
+            (max-src-states {}, max-src-conn-rate {}/5)\n",
+            ip, down, down
         ));
-    }
-
-    rules.push_str("block drop from <limited> to any\n");
-    rules.push_str("block drop from any to <limited>\n");
-
-    if upload.is_some() {
-        rules.push_str("pass out from <limited> to any queue upload\n");
-    }
-    if download.is_some() {
-        rules.push_str("pass in from any to <limited> queue download\n");
     }
 
     // Write rules to file
     std::fs::write("/tmp/pf.rules", &rules)?;
 
-    // Enable PF if not already enabled
-    run_sudo_command("pfctl", &["-e"])?;
+    // Enable PF if not already enabled (ignore if already enabled)
+    let _ = run_sudo_command("pfctl", &["-e"]);
 
     // Load the rules
     run_sudo_command("pfctl", &["-f", "/tmp/pf.rules"])?;
