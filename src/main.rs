@@ -134,21 +134,30 @@ fn scan_network(interface: &str) -> Result<()> {
         String::from_utf8_lossy(&output.stdout)
     );
 
-    // Get network details
-    let airport_output = run_sudo_command(
-        "/System/Library/PrivateFrameworks/Apple80211.framework/Versions/Current/Resources/airport",
-        &["-I"],
-    )?;
-    println!("\nNetwork details:");
-    println!("{}", String::from_utf8_lossy(&airport_output.stdout));
+    // Get network details including subnet
+    let ifconfig_output = Command::new("ifconfig")
+        .arg(interface)
+        .output()
+        .context("Failed to get interface details")?;
+    let ifconfig_str = String::from_utf8_lossy(&ifconfig_output.stdout);
 
-    // Perform ARP scan
+    // Perform active network scan using nmap
+    println!("\nScanning network for active devices...");
+    let nmap_output = Command::new("nmap")
+        .args(["-sn", &format!("-e{}", interface), "-oG", "-"]) // -sn performs ping scan
+        .output()
+        .context("Failed to run nmap scan. Please ensure nmap is installed.")?;
+
+    println!("\nDiscovered devices:");
+    println!("{}", String::from_utf8_lossy(&nmap_output.stdout));
+
+    // Still include ARP cache for recently seen devices
     let arp_output = Command::new("arp")
         .arg("-a")
         .output()
         .context("Failed to run ARP scan")?;
 
-    println!("\nDiscovered devices:");
+    println!("\nRecently active devices (ARP cache):");
     println!("{}", String::from_utf8_lossy(&arp_output.stdout));
 
     Ok(())
