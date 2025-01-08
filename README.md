@@ -1,5 +1,7 @@
 # Rust WiFi Kicker for macOS
 
+![Rust WiFi Kicker Cover](./image.jpg)
+
 A macOS tool for monitoring and managing network bandwidth of devices on your local network. This tool uses macOS's Packet Filter (PF) system to control network traffic.
 
 ## Features
