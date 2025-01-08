@@ -27,6 +27,8 @@ A macOS tool for monitoring and managing network bandwidth of devices on your lo
 git clone <your-repo>
 cd rust-wifi-kicker
 
+# For scanning of the network
+brew install nmap
 # Build the project
 cargo build --release
 ```
